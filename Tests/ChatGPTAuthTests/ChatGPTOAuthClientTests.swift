@@ -109,7 +109,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.pollOnce(device: device, timeout: .seconds(30))
     }
 
@@ -186,7 +186,7 @@ struct ChatGPTOAuthClientTests {
     let client = makeClient([.ok(httpResult(status: 503, json: "service down"))])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -203,7 +203,7 @@ struct ChatGPTOAuthClientTests {
     let client = makeClient([])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "has space", timeout: .seconds(30))
     }
 
@@ -228,7 +228,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -253,7 +253,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -272,7 +272,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -286,7 +286,7 @@ struct ChatGPTOAuthClientTests {
     let client = makeClient([.ok(httpResult(status: 200, json: "[1, 2, 3]"))])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -305,7 +305,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 
@@ -325,7 +325,7 @@ struct ChatGPTOAuthClientTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await client.refresh(refreshToken: "held", timeout: .seconds(30))
     }
 

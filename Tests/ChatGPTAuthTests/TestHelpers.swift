@@ -9,6 +9,23 @@ func httpResult(status: Int, json: String, headers: [String: String] = [:]) -> H
   HTTPResult(statusCode: status, headers: headers, body: Data(json.utf8))
 }
 
+/// Runs `body` and returns the error it threw as `E`, or nil when it threw nothing or a different
+/// type. Portable across swift-testing versions: the bundled `#expect(throws:)` returns the thrown
+/// error on newer toolchains but `Void` on Swift 6.0, so tests that inspect the error use this.
+func captureError<E: Error, R>(
+  _ type: E.Type,
+  _ body: () async throws -> R
+) async -> E? {
+  do {
+    _ = try await body()
+    return nil
+  } catch let error as E {
+    return error
+  } catch {
+    return nil
+  }
+}
+
 /// A transport that replies from a fixed script, in call order, and records every request it saw.
 /// An actor so the credential source's concurrent callers can share one safely.
 actor ScriptedHTTPClient: HTTPExecuting {

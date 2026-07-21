@@ -103,7 +103,7 @@ struct ChatGPTCredentialSourceTests {
     let source = makeSource(initial: expiring(), store: InMemoryTokenStore(), oauth: refresher)
 
     // when
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -121,10 +121,10 @@ struct ChatGPTCredentialSourceTests {
     let source = makeSource(initial: expiring(), store: InMemoryTokenStore(), oauth: refresher)
 
     // when
-    let first = await #expect(throws: ChatGPTCredentialError.self) {
+    let first = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
-    let second = await #expect(throws: ChatGPTCredentialError.self) {
+    let second = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -143,7 +143,7 @@ struct ChatGPTCredentialSourceTests {
     let source = makeSource(initial: expiring(), store: store, oauth: refresher)
 
     // when
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
     let retried = try await source.authorization()
@@ -201,7 +201,7 @@ struct ChatGPTCredentialSourceTests {
     store.failNextSave(with: .publicationFailed)
     let refresher = ScriptedRefresher([.pair(rotatedPair())])
     let source = makeSource(initial: expiring(), store: store, oauth: refresher)
-    _ = await #expect(throws: ChatGPTCredentialError.self) {
+    _ = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -219,7 +219,7 @@ struct ChatGPTCredentialSourceTests {
 
     // when
     try await source.shutdown()
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -238,7 +238,7 @@ struct ChatGPTCredentialSourceTests {
     // when
     let first = try await source.authorization()
     await source.reject(generation: first.generation, disposition: .authenticationRequired)
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -253,7 +253,7 @@ struct ChatGPTCredentialSourceTests {
     let source = makeSource(initial: nil, store: InMemoryTokenStore(), oauth: ScriptedRefresher([]))
 
     // when
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -271,7 +271,7 @@ struct ChatGPTCredentialSourceTests {
     let source = makeSource(initial: unusable, store: InMemoryTokenStore(), oauth: ScriptedRefresher([]))
 
     // when
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -299,7 +299,7 @@ struct ChatGPTCredentialSourceTests {
       oauth: refresher,
       clock: clock
     ) { now }
-    _ = await #expect(throws: ChatGPTCredentialError.self) {
+    _ = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
@@ -320,12 +320,12 @@ struct ChatGPTCredentialSourceTests {
     store.failAllSaves(with: .publicationFailed)
     let refresher = ScriptedRefresher([.pair(rotatedPair())])
     let source = makeSource(initial: expiring(), store: store, oauth: refresher)
-    _ = await #expect(throws: ChatGPTCredentialError.self) {
+    _ = await captureError(ChatGPTCredentialError.self) {
       try await source.authorization()
     }
 
     // when
-    let failure = await #expect(throws: ChatGPTCredentialError.self) {
+    let failure = await captureError(ChatGPTCredentialError.self) {
       try await source.shutdown()
     }
 

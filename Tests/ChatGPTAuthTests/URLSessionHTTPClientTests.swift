@@ -7,10 +7,17 @@ import Testing
   import FoundationNetworking
 #endif
 
+/// A scripted stub response for the URL protocol below.
+struct StubResponse: Sendable {
+  let status: Int
+  let headers: [String: String]
+  let body: Data
+}
+
 /// A `URLProtocol` that answers from a per-run handler, so the bundled transport is exercised end to
 /// end without touching the network.
 class StubURLProtocol: URLProtocol {
-  nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> (HTTPURLResponse, Data))?
+  nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> StubResponse)?
 
   override class func canInit(with request: URLRequest) -> Bool {
     true
@@ -21,13 +28,24 @@ class StubURLProtocol: URLProtocol {
   }
 
   override func startLoading() {
-    guard let handler = Self.handler else {
+    guard let handler = Self.handler, let url = request.url else {
       client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
       return
     }
-    let (response, data) = handler(request)
+    let stub = handler(request)
+    guard
+      let response = HTTPURLResponse(
+        url: url,
+        statusCode: stub.status,
+        httpVersion: "HTTP/1.1",
+        headerFields: stub.headers
+      )
+    else {
+      client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+      return
+    }
     client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: data)
+    client?.urlProtocol(self, didLoad: stub.body)
     client?.urlProtocolDidFinishLoading(self)
   }
 
@@ -54,14 +72,8 @@ struct URLSessionHTTPClientTests {
   }
 
   private func respond(status: Int, body: Data, headers: [String: String] = [:]) {
-    StubURLProtocol.handler = { request in
-      let response = HTTPURLResponse(
-        url: request.url ?? URL(fileURLWithPath: "/"),
-        statusCode: status,
-        httpVersion: "HTTP/1.1",
-        headerFields: headers
-      )
-      return (response ?? HTTPURLResponse(), body)
+    StubURLProtocol.handler = { _ in
+      StubResponse(status: status, headers: headers, body: body)
     }
   }
 

@@ -53,7 +53,7 @@ struct ChatGPTDeviceLoginTests {
     ])
 
     // when
-    let failure = await #expect(throws: ChatGPTOAuthFailure.self) {
+    let failure = await captureError(ChatGPTOAuthFailure.self) {
       try await login.run { _ in }
     }
 
