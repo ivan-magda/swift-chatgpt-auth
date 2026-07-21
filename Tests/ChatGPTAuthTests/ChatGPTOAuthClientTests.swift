@@ -12,6 +12,21 @@ struct ChatGPTOAuthClientTests {
     return ChatGPTOAuthClient(http: ScriptedHTTPClient(replies)) { clock }
   }
 
+  /// Bodies a token endpoint can return with a 200 that still cannot become a usable pair: a
+  /// non-object, a missing access token, a rotated refresh token unfit for a header or not a string,
+  /// and a token whose only expiry is already past.
+  private static let malformedRefreshResponses: [String] = {
+    let token = makeJWT(payloadJSON: #"{"sub": "user"}"#)
+    let expiredToken = makeJWT(payloadJSON: #"{"exp": 1000000000}"#)
+    return [
+      "[1, 2, 3]",
+      #"{"refresh_token": "r", "expires_in": 3600}"#,
+      #"{"access_token": "\#(token)", "refresh_token": "bad token", "expires_in": 3600}"#,
+      #"{"access_token": "\#(token)", "refresh_token": 12345, "expires_in": 3600}"#,
+      #"{"access_token": "\#(expiredToken)"}"#
+    ]
+  }()
+
   // MARK: - Device Code
 
   @Test
@@ -214,18 +229,10 @@ struct ChatGPTOAuthClientTests {
     }
   }
 
-  @Test
-  func aRotatedRefreshTokenUnfitForAHeaderFailsRatherThanFallingBack() async throws {
-    // given: the rotated refresh_token carries a space, so it cannot be spent later
-    let token = makeJWT(payloadJSON: #"{"sub": "user"}"#)
-    let client = makeClient([
-      .ok(
-        httpResult(
-          status: 200,
-          json: #"{"access_token": "\#(token)", "refresh_token": "bad token", "expires_in": 3600}"#
-        )
-      )
-    ])
+  @Test(arguments: ChatGPTOAuthClientTests.malformedRefreshResponses)
+  func aRefreshResponseThatCannotYieldAUsablePairIsMalformed(body: String) async throws {
+    // given: a 200 whose body cannot become a spendable, unexpired, header-safe pair
+    let client = makeClient([.ok(httpResult(status: 200, json: body))])
 
     // when
     let failure = await captureError(ChatGPTOAuthFailure.self) {
@@ -234,32 +241,7 @@ struct ChatGPTOAuthClientTests {
 
     // then
     guard case .malformedResponse? = failure else {
-      Issue.record("expected malformedResponse, got \(String(describing: failure))")
-      return
-    }
-  }
-
-  @Test
-  func aRotatedRefreshTokenThatIsNotAStringIsRejected() async throws {
-    // given: refresh_token arrives as a JSON number
-    let token = makeJWT(payloadJSON: #"{"sub": "user"}"#)
-    let client = makeClient([
-      .ok(
-        httpResult(
-          status: 200,
-          json: #"{"access_token": "\#(token)", "refresh_token": 12345, "expires_in": 3600}"#
-        )
-      )
-    ])
-
-    // when
-    let failure = await captureError(ChatGPTOAuthFailure.self) {
-      try await client.refresh(refreshToken: "held", timeout: .seconds(30))
-    }
-
-    // then
-    guard case .malformedResponse? = failure else {
-      Issue.record("expected malformedResponse, got \(String(describing: failure))")
+      Issue.record("expected malformedResponse for \(body), got \(String(describing: failure))")
       return
     }
   }
@@ -280,59 +262,4 @@ struct ChatGPTOAuthClientTests {
     #expect(failure == .throttled(retryAfter: .seconds(20)))
   }
 
-  @Test
-  func aResponseThatIsNotAJSONObjectIsMalformed() async throws {
-    // given
-    let client = makeClient([.ok(httpResult(status: 200, json: "[1, 2, 3]"))])
-
-    // when
-    let failure = await captureError(ChatGPTOAuthFailure.self) {
-      try await client.refresh(refreshToken: "held", timeout: .seconds(30))
-    }
-
-    // then
-    guard case .malformedResponse? = failure else {
-      Issue.record("expected malformedResponse, got \(String(describing: failure))")
-      return
-    }
-  }
-
-  @Test
-  func aTokenResponseWithNoAccessTokenIsMalformed() async throws {
-    // given
-    let client = makeClient([
-      .ok(httpResult(status: 200, json: #"{"refresh_token": "r", "expires_in": 3600}"#))
-    ])
-
-    // when
-    let failure = await captureError(ChatGPTOAuthFailure.self) {
-      try await client.refresh(refreshToken: "held", timeout: .seconds(30))
-    }
-
-    // then
-    guard case .malformedResponse? = failure else {
-      Issue.record("expected malformedResponse, got \(String(describing: failure))")
-      return
-    }
-  }
-
-  @Test
-  func aTokenWhoseOnlyExpiryIsAlreadyPastIsMalformed() async throws {
-    // given: no stated lifetime, and the JWT exp is in the past
-    let token = makeJWT(payloadJSON: #"{"exp": 1000000000}"#)
-    let client = makeClient([
-      .ok(httpResult(status: 200, json: #"{"access_token": "\#(token)"}"#))
-    ])
-
-    // when
-    let failure = await captureError(ChatGPTOAuthFailure.self) {
-      try await client.refresh(refreshToken: "held", timeout: .seconds(30))
-    }
-
-    // then
-    guard case .malformedResponse? = failure else {
-      Issue.record("expected malformedResponse, got \(String(describing: failure))")
-      return
-    }
-  }
 }

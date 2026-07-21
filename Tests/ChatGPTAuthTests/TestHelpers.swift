@@ -90,6 +90,8 @@ struct ManualInstant: InstantProtocol {
 
 /// A clock the test drives. `sleep` advances the clock to the deadline rather than waiting, so a
 /// poll loop over a fifteen-minute window runs in an instant while still honoring every deadline.
+///
+/// The `@unchecked Sendable` is sound because every read and write of `current` goes through `lock`.
 final class ManualClock: Clock, @unchecked Sendable {
   typealias Instant = ManualInstant
 
@@ -120,8 +122,10 @@ final class ManualClock: Clock, @unchecked Sendable {
 
 // MARK: - Token Store Double
 
-/// An in-memory `ChatGPTTokenStore`. `saveError` makes the next save fail, which is how a
-/// persistence path is exercised without a disk.
+/// An in-memory `ChatGPTTokenStore`. `failNextSave` / `failAllSaves` make a save throw, which is how
+/// a persistence path is exercised without a disk.
+///
+/// The `@unchecked Sendable` is sound because `lock` guards every stored field.
 final class InMemoryTokenStore: ChatGPTTokenStore, @unchecked Sendable {
   private let lock = NSLock()
   private var stored: ChatGPTCredential?

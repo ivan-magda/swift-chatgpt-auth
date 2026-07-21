@@ -17,6 +17,8 @@ struct StubResponse: Sendable {
 /// A `URLProtocol` that answers from a per-run handler, so the bundled transport is exercised end to
 /// end without touching the network.
 class StubURLProtocol: URLProtocol {
+  // Set per test; `nonisolated(unsafe)` is sound because the suite below is `.serialized`, so no two
+  // tests touch this concurrently.
   nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> StubResponse)?
 
   override class func canInit(with request: URLRequest) -> Bool {
