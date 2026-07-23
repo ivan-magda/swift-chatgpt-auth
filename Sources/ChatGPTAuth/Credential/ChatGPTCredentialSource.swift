@@ -77,10 +77,15 @@ where ClockType.Duration == Duration {
   /// A verdict about a snapshot, so it only counts while that snapshot is the one being spent: a
   /// late 401 from a request that authorized two rotations ago has nothing to say about the token
   /// now on the wire.
+  ///
+  /// Returns whether the verdict was about the credential currently held. `false` means it was
+  /// stale — the pair it judged has already been replaced — so a caller must not treat its own 401
+  /// as the last word on the credential the source holds now.
+  @discardableResult
   public func reject(
     generation: ChatGPTCredentialGeneration,
     disposition: ChatGPTCredentialRejection
-  ) async {
+  ) async -> Bool {
     switch state {
     case .ready(let credential, let current, _) where current == generation:
       switch disposition {
@@ -89,17 +94,19 @@ where ClockType.Duration == Duration {
       case .authenticationRequired:
         state = .authenticationRequired
       }
+      return true
     case .cooldown(let cooling) where cooling.generation == generation:
       // A cooldown already ends in a refresh, so `.refresh` asks for what is coming. A terminal
       // verdict is worth latching now: it saves the wait and the request that would follow it.
       if disposition == .authenticationRequired {
         state = .authenticationRequired
       }
+      return true
     default:
       // A refresh in flight is already the answer to `.refresh`, and its own result decides whether
       // the credential is finished. A pending write must not be dropped on a verdict about the
       // generation it is replacing.
-      break
+      return false
     }
   }
 
@@ -121,6 +128,38 @@ where ClockType.Duration == Duration {
       throw ChatGPTCredentialError.persistenceFailed(error)
     }
     state = .stopping(Stopping())
+  }
+
+  /// Discards the credential through its one owner: memory first, then the store, so no caller can
+  /// spend a pair the person has asked to be rid of. A refresh in flight is cancelled and its late
+  /// result discarded; waiters leave with `authenticationRequired`, because a new login is now the
+  /// only repair. There is no revocation endpoint to call, so clearing is the whole operation.
+  ///
+  /// A delete that fails still clears memory — the local half of the logout is not conditional on
+  /// the disk — and reports `persistenceFailed` so the caller knows the disk still holds the pair
+  /// and may retry the logout.
+  public func logout() async throws {
+    switch state {
+    case .stopping:
+      throw ChatGPTCredentialError.shuttingDown
+    case .refreshing(let flight):
+      flight.task.cancel()
+    case .missing, .ready, .pendingPersistence, .cooldown, .authenticationRequired:
+      break
+    }
+
+    state = .missing
+    // The retained prior pair exists to scrub diagnostics of requests still on the wire, but a
+    // logged-out source hands out no further authorizations to carry those values — holding the
+    // secrets for the actor's remaining lifetime would serve nothing.
+    priorPair = nil
+    resumeWaiters(with: .failure(ChatGPTCredentialError.authenticationRequired))
+
+    do {
+      try store.delete()
+    } catch {
+      throw ChatGPTCredentialError.persistenceFailed(error)
+    }
   }
 
   /// The one operation-ID-guarded finalizer: the only place that may write, publish, move the
@@ -197,6 +236,7 @@ extension ChatGPTCredentialSource {
   ) -> ChatGPTAuthorization {
     let base = ChatGPTProviderMetadata.authorization(
       accessToken: credential.accessToken,
+      expiresAt: credential.expiresAt,
       generation: generation
     )
     var values = base.redactionValues
@@ -208,7 +248,9 @@ extension ChatGPTCredentialSource {
     return ChatGPTAuthorization(
       headers: base.headers,
       redactionValues: values,
-      generation: base.generation
+      generation: base.generation,
+      accessToken: base.accessToken,
+      expiresAt: base.expiresAt
     )
   }
 
@@ -438,25 +480,5 @@ extension ChatGPTCredentialSource {
     // task was cancelled — that distinction is what `abandon` keeps for a single departing waiter.
     resumeWaiters(with: .failure(ChatGPTCredentialError.shuttingDown))
     return retained
-  }
-}
-
-// MARK: - Convenience
-
-public extension ChatGPTCredentialSource where ClockType == ContinuousClock {
-  /// The everyday source: a continuous clock measures cooldowns and the system wall clock measures a
-  /// token's expiry. Mirrors the zero-clock initializers on `ChatGPTDeviceLogin` and
-  /// `ChatGPTDeviceAuthorization`.
-  init(
-    initialCredential: ChatGPTCredential?,
-    store: any ChatGPTTokenStore,
-    oauth: any ChatGPTOAuthRefreshing
-  ) {
-    self.init(
-      initialCredential: initialCredential,
-      store: store,
-      oauth: oauth,
-      clock: ContinuousClock()
-    ) { Date() }
   }
 }

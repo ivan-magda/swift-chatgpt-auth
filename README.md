@@ -105,7 +105,7 @@ try myStore.save(credential)
 
 ### Keep a fresh bearer for every request
 
-Wrap the stored credential in a `ChatGPTCredentialSource` and ask it for authorization before each call. It refreshes the token when it is close to expiring and hands the same result to every caller waiting on that one refresh:
+Wrap the stored credential in a `ChatGPTCredentialSource` and let it authorize each call. It refreshes the token when it is close to expiring and hands the same result to every caller waiting on that one refresh:
 
 ```swift
 let source = ChatGPTCredentialSource(
@@ -114,17 +114,38 @@ let source = ChatGPTCredentialSource(
   oauth: client
 )
 
-let authorization = try await source.authorization()
 var request = URLRequest(url: apiURL)
-for (name, value) in authorization.headers {
-  request.setValue(value, forHTTPHeaderField: name)
+try await source.authorizeRequest(&request)
+```
+
+To let the source own the 401 loop as well — attach, send, and on a clean 401 refresh and retry once — hand it the send step. A second 401, spent against the freshly rotated token, latches the source and throws `ChatGPTCredentialError.authenticationRequired`:
+
+```swift
+let data = try await source.withAuthorization { authorization in
+  var request = URLRequest(url: apiURL)
+  authorization.apply(to: &request)
+  let (data, response) = try await URLSession.shared.data(for: request)
+  return (data, (response as? HTTPURLResponse)?.statusCode ?? 200)
 }
 ```
 
-When a request comes back with a 401, tell the source so its next authorization refreshes:
+A transport that does not speak `URLRequest` — a WebSocket handshake, gRPC metadata — reads the bearer and expiry directly instead of parsing headers:
+
+```swift
+let authorization = try await source.authorization()
+connect(bearer: authorization.accessToken)   // expiry at authorization.expiresAt, informational
+```
+
+Driving the loop yourself? Report a 401 back with the generation the authorization carried, so a late failure from an older request can never invalidate a newer token:
 
 ```swift
 await source.reject(generation: authorization.generation, disposition: .refresh)
+```
+
+To sign out, discard the credential through its owner — memory and store together:
+
+```swift
+try await source.logout()
 ```
 
 ### Provide a token store

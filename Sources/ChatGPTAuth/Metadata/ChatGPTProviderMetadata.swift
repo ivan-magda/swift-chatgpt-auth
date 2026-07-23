@@ -79,6 +79,7 @@ enum ChatGPTProviderMetadata {
   /// server may accept, and composition must not pre-empt that verdict.
   static func authorization(
     accessToken: String,
+    expiresAt: Date,
     generation: ChatGPTCredentialGeneration
   ) -> ChatGPTAuthorization {
     var headers = ["Authorization": "Bearer \(accessToken)"]
@@ -92,7 +93,9 @@ enum ChatGPTProviderMetadata {
     return ChatGPTAuthorization(
       headers: headers,
       redactionValues: redactionValues,
-      generation: generation
+      generation: generation,
+      accessToken: accessToken,
+      expiresAt: expiresAt
     )
   }
 

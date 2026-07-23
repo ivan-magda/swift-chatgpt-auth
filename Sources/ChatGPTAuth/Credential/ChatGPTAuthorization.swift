@@ -17,19 +17,30 @@ public struct ChatGPTCredentialGeneration: Sendable, Hashable, Equatable {
 
 /// What a source contributes to one request: the credential-dependent headers, the exact secret
 /// values a redactor must scrub before anything is logged or shown, and the snapshot they came from.
+///
+/// The bearer is also carried on its own as ``accessToken`` so a transport that does not speak
+/// HTTP headers — a WebSocket handshake, gRPC metadata — never has to parse it back out of
+/// ``headers``. ``expiresAt`` is informational: it restates the unverified expiry the source
+/// classified with, and the server stays the only party that decides whether the token is valid.
 public struct ChatGPTAuthorization: Sendable, Equatable {
   public let headers: [String: String]
   public let redactionValues: [String]
   public let generation: ChatGPTCredentialGeneration
+  public let accessToken: String
+  public let expiresAt: Date
 
   public init(
     headers: [String: String],
     redactionValues: [String],
-    generation: ChatGPTCredentialGeneration
+    generation: ChatGPTCredentialGeneration,
+    accessToken: String,
+    expiresAt: Date
   ) {
     self.headers = headers
     self.redactionValues = redactionValues
     self.generation = generation
+    self.accessToken = accessToken
+    self.expiresAt = expiresAt
   }
 }
 

@@ -122,8 +122,8 @@ final class ManualClock: Clock, @unchecked Sendable {
 
 // MARK: - Token Store Double
 
-/// An in-memory `ChatGPTTokenStore`. `failNextSave` / `failAllSaves` make a save throw, which is how
-/// a persistence path is exercised without a disk.
+/// An in-memory `ChatGPTTokenStore`. `failNextSave` / `failAllSaves` / `failNextDelete` make a
+/// write throw, which is how a persistence path is exercised without a disk.
 ///
 /// The `@unchecked Sendable` is sound because `lock` guards every stored field.
 final class InMemoryTokenStore: ChatGPTTokenStore, @unchecked Sendable {
@@ -131,6 +131,7 @@ final class InMemoryTokenStore: ChatGPTTokenStore, @unchecked Sendable {
   private var stored: ChatGPTCredential?
   private var pendingSaveError: ChatGPTTokenStoreError?
   private var permanentSaveError: ChatGPTTokenStoreError?
+  private var pendingDeleteError: ChatGPTTokenStoreError?
   private var saves = 0
 
   init(_ initial: ChatGPTCredential? = nil) {
@@ -161,6 +162,12 @@ final class InMemoryTokenStore: ChatGPTTokenStore, @unchecked Sendable {
     permanentSaveError = error
   }
 
+  func failNextDelete(with error: ChatGPTTokenStoreError) {
+    lock.lock()
+    defer { lock.unlock() }
+    pendingDeleteError = error
+  }
+
   func load() throws(ChatGPTTokenStoreError) -> ChatGPTCredential? {
     lock.lock()
     defer { lock.unlock() }
@@ -184,6 +191,10 @@ final class InMemoryTokenStore: ChatGPTTokenStore, @unchecked Sendable {
   func delete() throws(ChatGPTTokenStoreError) {
     lock.lock()
     defer { lock.unlock() }
+    if let error = pendingDeleteError {
+      pendingDeleteError = nil
+      throw error
+    }
     stored = nil
   }
 }

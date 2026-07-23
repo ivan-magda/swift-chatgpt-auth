@@ -55,6 +55,20 @@ struct ChatGPTCredentialSourceTests {
   }
 
   @Test
+  func anAuthorizationCarriesTheTypedTokenAndExpiry() async throws {
+    // given
+    let refresher = ScriptedRefresher([])
+    let source = makeSource(initial: fresh(), store: InMemoryTokenStore(), oauth: refresher)
+
+    // when
+    let authorization = try await source.authorization()
+
+    // then: a non-URLRequest transport reads the bearer and expiry without parsing headers
+    #expect(authorization.accessToken == "fresh-access")
+    #expect(authorization.expiresAt == wallDate.addingTimeInterval(3600))
+  }
+
+  @Test
   func anExpiringCredentialRefreshesRotatesAndPersists() async throws {
     // given
     let store = InMemoryTokenStore(expiring())
@@ -88,6 +102,82 @@ struct ChatGPTCredentialSourceTests {
     // then
     #expect(await refresher.callCount() == 1)
     #expect(firstResult.generation == secondResult.generation)
+  }
+
+  // MARK: - Logout
+
+  @Test
+  func logoutClearsTheStoreAndRequiresANewLogin() async throws {
+    // given
+    let store = InMemoryTokenStore(fresh())
+    let source = makeSource(initial: fresh(), store: store, oauth: ScriptedRefresher([]))
+
+    // when
+    try await source.logout()
+
+    // then: the pair is gone durably and in memory, and only a new login repairs it
+    #expect(store.current == nil)
+    let failure = await captureError(ChatGPTCredentialError.self) {
+      try await source.authorization()
+    }
+    #expect(failure == .authenticationRequired)
+  }
+
+  @Test
+  func logoutResumesInFlightWaitersAndDiscardsTheRotation() async throws {
+    // given: a refresh is in flight and a caller is waiting on it
+    let store = InMemoryTokenStore(expiring())
+    let refresher = GatedRefresher(returning: rotatedPair())
+    let source = makeSource(initial: expiring(), store: store, oauth: refresher)
+    let waiting = Task { try await source.authorization() }
+    await refresher.awaitEntered()
+
+    // when
+    try await source.logout()
+
+    // then: the waiter leaves with the terminal verdict, and the late rotation is discarded
+    let failure = await captureError(ChatGPTCredentialError.self) {
+      try await waiting.value
+    }
+    #expect(failure == .authenticationRequired)
+    await refresher.release()
+    await Task.yield()
+    #expect(store.current == nil)
+  }
+
+  @Test
+  func logoutThatCannotDeleteStillClearsMemoryAndReportsTheFailure() async throws {
+    // given
+    let store = InMemoryTokenStore(fresh())
+    store.failNextDelete(with: .unavailable)
+    let source = makeSource(initial: fresh(), store: store, oauth: ScriptedRefresher([]))
+
+    // when
+    let failure = await captureError(ChatGPTCredentialError.self) {
+      try await source.logout()
+    }
+
+    // then: the failure is reported, but the source never spends the pair again
+    #expect(failure == .persistenceFailed(.unavailable))
+    let next = await captureError(ChatGPTCredentialError.self) {
+      try await source.authorization()
+    }
+    #expect(next == .authenticationRequired)
+  }
+
+  @Test
+  func logoutOnAStoppingSourceReportsShuttingDown() async throws {
+    // given
+    let source = makeSource(initial: fresh(), store: InMemoryTokenStore(), oauth: ScriptedRefresher([]))
+    try await source.shutdown()
+
+    // when
+    let failure = await captureError(ChatGPTCredentialError.self) {
+      try await source.logout()
+    }
+
+    // then
+    #expect(failure == .shuttingDown)
   }
 
   // MARK: - Failure paths
