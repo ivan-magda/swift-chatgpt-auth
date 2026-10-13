@@ -1,9 +1,8 @@
 # ChatGPTAuth
 
 [![CI](https://github.com/ivan-magda/swift-chatgpt-auth/actions/workflows/swift.yml/badge.svg)](https://github.com/ivan-magda/swift-chatgpt-auth/actions/workflows/swift.yml)
-[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS%20%7C%20Linux-blue.svg)](https://swift.org)
-[![SPM Compatible](https://img.shields.io/badge/SPM-compatible-brightgreen.svg)](https://swift.org/package-manager)
+[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fivan-magda%2Fswift-chatgpt-auth%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/ivan-magda/swift-chatgpt-auth)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fivan-magda%2Fswift-chatgpt-auth%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/ivan-magda/swift-chatgpt-auth)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ChatGPTAuth signs a Swift app in to ChatGPT and Codex with the device-authorization OAuth flow, then keeps a fresh bearer token in hand. You show a short code, and once the person approves it in a browser, you get back a credential that renews on its own before it expires.
